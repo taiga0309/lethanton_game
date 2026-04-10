@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ao Dai Runner</title>
+    <title>Ao Dai Runner - Enhanced</title>
     <style>
         * {
             margin: 0;
@@ -42,11 +42,11 @@
             top: 20px;
             right: 20px;
             color: #2F4F4F;
-            font-size: 24px;
+            font-size: 20px;
             font-weight: bold;
             text-shadow: 1px 1px 2px rgba(255,255,255,0.8);
             z-index: 10;
-            background: rgba(255,255,255,0.7);
+            background: rgba(255,255,255,0.8);
             padding: 12px 18px;
             border-radius: 10px;
         }
@@ -87,8 +87,8 @@
             color: #2F4F4F;
             font-size: 16px;
             text-align: center;
-            background: rgba(255,255,255,0.8);
-            padding: 10px 20px;
+            background: rgba(255,255,255,0.9);
+            padding: 15px 25px;
             border-radius: 20px;
             z-index: 10;
         }
@@ -135,13 +135,20 @@
         </div>
         <div id="ui" style="display: none;">
             <div>Score: <span id="score">0</span></div>
+            <div style="font-size: 16px; margin-top: 5px;">Level: <span id="level">1</span></div>
         </div>
         <div id="instructions" style="display: none;">
-            Tap or Click to Jump!
+            <div><strong>Tap or Click to Jump!</strong></div>
+            <div style="font-size: 14px; margin-top: 8px;">
+                🦘 Jump over ground obstacles<br>
+                🦆 Duck under flying obstacles<br>
+                ⚡ Watch out for stacked obstacles!
+            </div>
         </div>
         <div id="gameOver">
             <h2>Game Over!</h2>
             <p>Final Score: <span id="finalScore">0</span></p>
+            <p>Level Reached: <span id="finalLevel">1</span></p>
             <p>Best Score: <span id="bestScore">0</span></p>
             <button id="restartBtn">Play Again</button>
         </div>
@@ -161,11 +168,12 @@
                     
                     this.gameState = 'loading';
                     this.score = 0;
+                    this.level = 1;
                     this.bestScore = parseInt(localStorage.getItem('aoDaiRunnerBest')) || 0;
                     this.gameSpeed = 4;
                     this.gravity = 0.6;
                     
-                    // Image loading - now with 3 images
+                    // Image loading
                     this.images = {
                         player: null,
                         obstacle1: null,
@@ -174,7 +182,7 @@
                     this.imagesLoaded = 0;
                     this.totalImages = 3;
                     
-                    // Player properties
+                    // Enhanced player properties
                     this.player = {
                         x: 80,
                         y: 0,
@@ -182,26 +190,34 @@
                         height: 50,
                         velocityY: 0,
                         isJumping: false,
-                        jumpPower: -15,
+                        isDucking: false,
+                        jumpPower: -16,
                         groundY: this.canvas.height - 110,
-                        animFrame: 0
+                        animFrame: 0,
+                        duckHeight: 25, // Height when ducking
+                        normalHeight: 50
                     };
                     
                     this.player.y = this.player.groundY;
                     
-                    // Obstacles
+                    // Enhanced obstacles system
                     this.obstacles = [];
                     this.obstacleSpawnTimer = 0;
-                    this.obstacleSpawnInterval = 120;
+                    this.obstacleSpawnInterval = 100;
+                    this.minSpawnInterval = 40;
                     
-                    // Ground
+                    // Ground and air levels
                     this.groundY = this.canvas.height - 60;
+                    this.airY = this.canvas.height - 200; // Flying obstacle level
                     
                     // Clouds
                     this.clouds = [];
                     this.initializeClouds();
                     
-                    // Load images first
+                    // Difficulty progression
+                    this.difficultyTimer = 0;
+                    this.difficultyInterval = 1000; // Increase difficulty every 1000 frames
+                    
                     this.loadImages();
                 }
                 
@@ -220,7 +236,7 @@
                     };
                     this.images.player.src = 'images/player.png';
                     
-                    // Load first obstacle image
+                    // Load obstacle images
                     this.images.obstacle1 = new Image();
                     this.images.obstacle1.onload = () => {
                         console.log('Obstacle 1 image loaded successfully');
@@ -234,7 +250,6 @@
                     };
                     this.images.obstacle1.src = 'images/obstacle.png';
                     
-                    // Load second obstacle image
                     this.images.obstacle2 = new Image();
                     this.images.obstacle2.onload = () => {
                         console.log('Obstacle 2 image loaded successfully');
@@ -257,7 +272,7 @@
                     if (this.imagesLoaded >= this.totalImages) {
                         setTimeout(() => {
                             this.checkImagesLoaded();
-                        }, 500); // Small delay to show 100% progress
+                        }, 500);
                     }
                 }
                 
@@ -271,17 +286,16 @@
                     this.setupEventListeners();
                     this.gameLoop();
                     
-                    // Update best score display
                     document.getElementById('bestScore').textContent = this.bestScore;
                 }
                 
                 initializeClouds() {
-                    for (let i = 0; i < 5; i++) {
+                    for (let i = 0; i < 6; i++) {
                         this.clouds.push({
                             x: Math.random() * this.canvas.width,
-                            y: Math.random() * (this.canvas.height * 0.3),
-                            width: 40 + Math.random() * 40,
-                            speed: 0.5 + Math.random() * 1
+                            y: Math.random() * (this.canvas.height * 0.4),
+                            width: 30 + Math.random() * 50,
+                            speed: 0.3 + Math.random() * 1.2
                         });
                     }
                 }
@@ -305,6 +319,17 @@
                             e.preventDefault();
                             this.handleJump();
                         }
+                        if (e.code === 'ArrowDown') {
+                            e.preventDefault();
+                            this.handleDuck();
+                        }
+                    });
+                    
+                    document.addEventListener('keyup', (e) => {
+                        if (e.code === 'ArrowDown') {
+                            this.player.isDucking = false;
+                            this.player.height = this.player.normalHeight;
+                        }
                     });
                     
                     // Restart button
@@ -324,21 +349,33 @@
                         document.getElementById('instructions').style.display = 'none';
                     }
                     
-                    if (this.gameState === 'playing' && !this.player.isJumping) {
+                    if (this.gameState === 'playing' && !this.player.isJumping && !this.player.isDucking) {
                         this.player.velocityY = this.player.jumpPower;
                         this.player.isJumping = true;
+                    }
+                }
+                
+                handleDuck() {
+                    if (this.gameState === 'playing' && !this.player.isJumping) {
+                        this.player.isDucking = true;
+                        this.player.height = this.player.duckHeight;
                     }
                 }
                 
                 restartGame() {
                     this.gameState = 'ready';
                     this.score = 0;
+                    this.level = 1;
                     this.gameSpeed = 4;
+                    this.difficultyTimer = 0;
+                    this.obstacleSpawnInterval = 100;
                     
                     // Reset player
                     this.player.y = this.player.groundY;
                     this.player.velocityY = 0;
                     this.player.isJumping = false;
+                    this.player.isDucking = false;
+                    this.player.height = this.player.normalHeight;
                     this.player.animFrame = 0;
                     
                     // Clear obstacles
@@ -353,11 +390,19 @@
                 update() {
                     if (this.gameState !== 'playing') return;
                     
-                    // Update score
+                    // Update score and level
                     this.score += 1;
+                    this.level = Math.floor(this.score / 500) + 1;
                     
-                    // Increase game speed gradually
-                    this.gameSpeed = 4 + (this.score / 1000);
+                    // Increase game speed and difficulty
+                    this.gameSpeed = 4 + (this.level * 0.5);
+                    
+                    // Update difficulty
+                    this.difficultyTimer++;
+                    if (this.difficultyTimer >= this.difficultyInterval) {
+                        this.obstacleSpawnInterval = Math.max(this.minSpawnInterval, this.obstacleSpawnInterval - 5);
+                        this.difficultyTimer = 0;
+                    }
                     
                     // Update player physics
                     if (this.player.isJumping) {
@@ -373,22 +418,25 @@
                     }
                     
                     // Update player animation
-                    this.player.animFrame += 0.2;
+                    this.player.animFrame += 0.3;
                     
-                    // Spawn obstacles
+                    // Spawn obstacles with enhanced patterns
                     this.obstacleSpawnTimer++;
                     if (this.obstacleSpawnTimer >= this.obstacleSpawnInterval) {
-                        this.spawnObstacle();
+                        this.spawnObstaclePattern();
                         this.obstacleSpawnTimer = 0;
-                        
-                        // Gradually decrease spawn interval
-                        this.obstacleSpawnInterval = Math.max(60, 120 - Math.floor(this.score / 500));
                     }
                     
                     // Update obstacles
                     for (let i = this.obstacles.length - 1; i >= 0; i--) {
                         const obstacle = this.obstacles[i];
                         obstacle.x -= this.gameSpeed;
+                        
+                        // Update flying obstacles (slight up/down movement)
+                        if (obstacle.isFlying) {
+                            obstacle.floatOffset += obstacle.floatSpeed;
+                            obstacle.y = obstacle.baseY + Math.sin(obstacle.floatOffset) * obstacle.floatAmplitude;
+                        }
                         
                         // Remove off-screen obstacles
                         if (obstacle.x + obstacle.width < 0) {
@@ -407,37 +455,145 @@
                     this.clouds.forEach(cloud => {
                         cloud.x -= cloud.speed;
                         if (cloud.x + cloud.width < 0) {
-                            cloud.x = this.canvas.width;
-                            cloud.y = Math.random() * (this.canvas.height * 0.3);
+                            cloud.x = this.canvas.width + Math.random() * 100;
+                            cloud.y = Math.random() * (this.canvas.height * 0.4);
                         }
                     });
                     
                     // Update UI
                     document.getElementById('score').textContent = this.score;
+                    document.getElementById('level').textContent = this.level;
                 }
                 
-                spawnObstacle() {
-                    // Randomly choose between obstacle1 and obstacle2
+                spawnObstaclePattern() {
+                    const patterns = [
+                        'single',      // Single obstacle
+                        'double',      // Two obstacles with gap
+                        'stack',       // Stacked obstacles
+                        'flying',      // Flying obstacle
+                        'mixed',       // Ground + flying
+                        'triple'       // Three obstacles (high level only)
+                    ];
+                    
+                    // Filter patterns based on level
+                    let availablePatterns = patterns.slice(0, Math.min(3 + Math.floor(this.level / 2), patterns.length));
+                    
+                    const pattern = availablePatterns[Math.floor(Math.random() * availablePatterns.length)];
+                    
+                    switch (pattern) {
+                        case 'single':
+                            this.spawnSingleObstacle();
+                            break;
+                        case 'double':
+                            this.spawnDoubleObstacle();
+                            break;
+                        case 'stack':
+                            this.spawnStackedObstacle();
+                            break;
+                        case 'flying':
+                            this.spawnFlyingObstacle();
+                            break;
+                        case 'mixed':
+                            this.spawnMixedObstacle();
+                            break;
+                        case 'triple':
+                            this.spawnTripleObstacle();
+                            break;
+                    }
+                }
+                
+                spawnSingleObstacle() {
+                    const isFlying = Math.random() < 0.3; // 30% chance of flying
+                    this.createObstacle(this.canvas.width, isFlying);
+                }
+                
+                spawnDoubleObstacle() {
+                    this.createObstacle(this.canvas.width, false);
+                    this.createObstacle(this.canvas.width + 60 + Math.random() * 40, false);
+                }
+                
+                spawnStackedObstacle() {
+                    const x = this.canvas.width;
+                    this.createObstacle(x, false, 'small'); // Bottom obstacle
+                    this.createObstacle(x, false, 'small', this.groundY - 70); // Top obstacle
+                }
+                
+                spawnFlyingObstacle() {
+                    this.createObstacle(this.canvas.width, true);
+                }
+                
+                spawnMixedObstacle() {
+                    this.createObstacle(this.canvas.width, false); // Ground
+                    this.createObstacle(this.canvas.width + 40, true); // Flying
+                }
+                
+                spawnTripleObstacle() {
+                    const baseX = this.canvas.width;
+                    this.createObstacle(baseX, false, 'small');
+                    this.createObstacle(baseX + 45, true, 'small');
+                    this.createObstacle(baseX + 90, false, 'small');
+                }
+                
+                createObstacle(x, isFlying = false, size = 'normal', customY = null) {
                     const obstacleType = Math.random() < 0.5 ? 'obstacle1' : 'obstacle2';
                     
+                    // Size variations
+                    let width, height;
+                    switch (size) {
+                        case 'small':
+                            width = 20 + Math.random() * 15;
+                            height = 25 + Math.random() * 15;
+                            break;
+                        case 'large':
+                            width = 40 + Math.random() * 20;
+                            height = 50 + Math.random() * 20;
+                            break;
+                        default: // normal
+                            width = 25 + Math.random() * 20;
+                            height = 35 + Math.random() * 15;
+                    }
+                    
+                    let y;
+                    if (customY !== null) {
+                        y = customY - height;
+                    } else if (isFlying) {
+                        y = this.airY - height + (Math.random() * 60 - 30); // Vary flying height
+                    } else {
+                        y = this.groundY - height;
+                    }
+                    
                     const obstacle = {
-                        x: this.canvas.width,
-                        y: this.groundY - 40,
-                        width: 30,
-                        height: 40,
-                        type: obstacleType // Store which obstacle image to use
+                        x: x,
+                        y: y,
+                        width: width,
+                        height: height,
+                        type: obstacleType,
+                        isFlying: isFlying,
+                        size: size
                     };
+                    
+                    // Add floating animation for flying obstacles
+                    if (isFlying) {
+                        obstacle.baseY = y;
+                        obstacle.floatOffset = Math.random() * Math.PI * 2;
+                        obstacle.floatSpeed = 0.05 + Math.random() * 0.05;
+                        obstacle.floatAmplitude = 5 + Math.random() * 10;
+                    }
                     
                     this.obstacles.push(obstacle);
                 }
                 
                 checkCollision(player, obstacle) {
-                    // Slightly more forgiving collision detection
-                    const margin = 5;
+                    const margin = 3; // More precise collision
+                    
+                    // Adjust player hitbox based on ducking
+                    const playerHeight = player.isDucking ? player.duckHeight : player.height;
+                    const playerY = player.isDucking ? player.groundY + (player.normalHeight - player.duckHeight) : player.y;
+                    
                     return player.x + margin < obstacle.x + obstacle.width &&
                            player.x + player.width - margin > obstacle.x &&
-                           player.y + margin < obstacle.y + obstacle.height &&
-                           player.y + player.height - margin > obstacle.y;
+                           playerY + margin < obstacle.y + obstacle.height &&
+                           playerY + playerHeight - margin > obstacle.y;
                 }
                 
                 gameOver() {
@@ -450,47 +606,74 @@
                     }
                     
                     document.getElementById('finalScore').textContent = this.score;
+                    document.getElementById('finalLevel').textContent = this.level;
                     document.getElementById('bestScore').textContent = this.bestScore;
                     document.getElementById('gameOver').style.display = 'block';
                 }
                 
                 draw() {
-                    // Clear canvas with sky gradient
+                    // Clear canvas with enhanced sky gradient
                     const gradient = this.ctx.createLinearGradient(0, 0, 0, this.canvas.height);
                     gradient.addColorStop(0, '#87CEEB');
+                    gradient.addColorStop(0.3, '#98D8E8');
                     gradient.addColorStop(0.7, '#90EE90');
                     gradient.addColorStop(1, '#8FBC8F');
                     this.ctx.fillStyle = gradient;
                     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
                     
-                    // Draw clouds
+                    // Draw enhanced clouds
                     this.clouds.forEach(cloud => {
-                        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
                         this.ctx.beginPath();
-                        this.ctx.arc(cloud.x, cloud.y, cloud.width/4, 0, Math.PI * 2);
-                        this.ctx.arc(cloud.x + cloud.width/3, cloud.y, cloud.width/3, 0, Math.PI * 2);
-                        this.ctx.arc(cloud.x + cloud.width*2/3, cloud.y, cloud.width/4, 0, Math.PI * 2);
+                        this.ctx.arc(cloud.x, cloud.y, cloud.width/5, 0, Math.PI * 2);
+                        this.ctx.arc(cloud.x + cloud.width/4, cloud.y, cloud.width/4, 0, Math.PI * 2);
+                        this.ctx.arc(cloud.x + cloud.width/2, cloud.y, cloud.width/3, 0, Math.PI * 2);
+                        this.ctx.arc(cloud.x + cloud.width*3/4, cloud.y, cloud.width/4, 0, Math.PI * 2);
                         this.ctx.fill();
                     });
                     
-                    // Draw ground
+                    // Draw ground with texture
                     this.ctx.fillStyle = '#8FBC8F';
                     this.ctx.fillRect(0, this.groundY, this.canvas.width, this.canvas.height - this.groundY);
                     
+                    // Ground details
+                    this.ctx.fillStyle = '#7CFC00';
+                    for (let i = 0; i < this.canvas.width; i += 30) {
+                        this.ctx.fillRect(i, this.groundY, 20, 3);
+                    }
+                    
                     // Draw ground line
                     this.ctx.strokeStyle = '#228B22';
-                    this.ctx.lineWidth = 2;
+                    this.ctx.lineWidth = 3;
                     this.ctx.beginPath();
                     this.ctx.moveTo(0, this.groundY);
                     this.ctx.lineTo(this.canvas.width, this.groundY);
                     this.ctx.stroke();
                     
-                    // Draw obstacles
+                    // Draw obstacles with enhanced visuals
                     this.obstacles.forEach(obstacle => {
                         const obstacleImage = this.images[obstacle.type];
                         
+                        // Add shadow for flying obstacles
+                        if (obstacle.isFlying) {
+                            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+                            this.ctx.ellipse(
+                                obstacle.x + obstacle.width/2,
+                                this.groundY - 5,
+                                obstacle.width/2,
+                                8,
+                                0, 0, Math.PI * 2
+                            );
+                            this.ctx.fill();
+                        }
+                        
                         if (obstacleImage && obstacleImage.complete) {
-                            // Draw the appropriate obstacle image
+                            // Add glow effect for flying obstacles
+                            if (obstacle.isFlying) {
+                                this.ctx.shadowColor = '#FFD700';
+                                this.ctx.shadowBlur = 10;
+                            }
+                            
                             this.ctx.drawImage(
                                 obstacleImage,
                                 obstacle.x,
@@ -498,32 +681,70 @@
                                 obstacle.width,
                                 obstacle.height
                             );
+                            
+                            this.ctx.shadowBlur = 0;
                         } else {
-                            // Fallback rectangle if image fails to load
-                            this.ctx.fillStyle = obstacle.type === 'obstacle1' ? '#228B22' : '#32CD32';
+                            // Enhanced fallback with different colors
+                            if (obstacle.isFlying) {
+                                this.ctx.fillStyle = obstacle.type === 'obstacle1' ? '#FFD700' : '#FF6347';
+                            } else {
+                                this.ctx.fillStyle = obstacle.type === 'obstacle1' ? '#228B22' : '#32CD32';
+                            }
                             this.ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+                            
+                            // Add size indicator
+                            if (obstacle.size === 'small') {
+                                this.ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+                                this.ctx.fillRect(obstacle.x + 2, obstacle.y + 2, obstacle.width - 4, 3);
+                            }
                         }
                     });
                     
-                    // Draw player
+                    // Draw enhanced player
                     let playerY = this.player.y;
-                    if (!this.player.isJumping) {
-                        playerY += Math.sin(this.player.animFrame) * 2; // Running bounce
+                    let playerHeight = this.player.height;
+                    
+                    // Adjust for ducking
+                    if (this.player.isDucking) {
+                        playerY = this.player.groundY + (this.player.normalHeight - this.player.duckHeight);
+                        playerHeight = this.player.duckHeight;
+                    }
+                    
+                    // Running bounce animation
+                    if (!this.player.isJumping && !this.player.isDucking) {
+                        playerY += Math.sin(this.player.animFrame) * 3;
                     }
                     
                     if (this.images.player && this.images.player.complete) {
-                        // Draw your custom player image
+                        // Add motion blur effect when jumping
+                        if (this.player.isJumping && Math.abs(this.player.velocityY) > 5) {
+                            this.ctx.globalAlpha = 0.7;
+                        }
+                        
                         this.ctx.drawImage(
                             this.images.player,
                             this.player.x,
                             playerY,
                             this.player.width,
-                            this.player.height
+                            playerHeight
                         );
+                        
+                        this.ctx.globalAlpha = 1.0;
                     } else {
-                        // Fallback rectangle if image fails to load
+                        // Enhanced fallback player
                         this.ctx.fillStyle = '#DC143C';
-                        this.ctx.fillRect(this.player.x, playerY, this.player.width, this.player.height);
+                        this.ctx.fillRect(this.player.x, playerY, this.player.width, playerHeight);
+                        
+                        // Add simple face
+                        this.ctx.fillStyle = '#fdbcb4';
+                        this.ctx.fillRect(this.player.x + 8, playerY + 2, 24, 15);
+                    }
+                    
+                    // Draw level indicator
+                    if (this.level > 1) {
+                        this.ctx.fillStyle = 'rgba(255, 215, 0, 0.8)';
+                        this.ctx.font = '16px Arial';
+                        this.ctx.fillText(`Level ${this.level}!`, this.canvas.width - 100, 50);
                     }
                 }
                 
