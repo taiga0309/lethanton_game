@@ -92,15 +92,51 @@
             border-radius: 20px;
             z-index: 10;
         }
+
+        #loadingScreen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #2F4F4F;
+            font-size: 18px;
+            text-align: center;
+            z-index: 15;
+        }
+
+        .loading-bar {
+            width: 200px;
+            height: 6px;
+            background: rgba(47, 79, 79, 0.3);
+            border-radius: 3px;
+            margin: 15px auto;
+            overflow: hidden;
+        }
+
+        .loading-progress {
+            height: 100%;
+            background: linear-gradient(45deg, #32CD32, #228B22);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
     </style>
 </head>
 <body>
     <div id="gameContainer">
         <canvas id="gameCanvas"></canvas>
-        <div id="ui">
+        <div id="loadingScreen">
+            <div>Loading images...</div>
+            <div class="loading-bar">
+                <div class="loading-progress" id="loadingProgress"></div>
+            </div>
+            <div style="font-size: 14px; margin-top: 10px;">
+                <span id="loadingText">0/3 images loaded</span>
+            </div>
+        </div>
+        <div id="ui" style="display: none;">
             <div>Score: <span id="score">0</span></div>
         </div>
-        <div id="instructions">
+        <div id="instructions" style="display: none;">
             Tap or Click to Jump!
         </div>
         <div id="gameOver">
@@ -112,7 +148,6 @@
     </div>
 
     <script>
-        // Wait for DOM to be fully loaded
         document.addEventListener('DOMContentLoaded', function() {
             
             class AoDaiRunner {
@@ -120,15 +155,24 @@
                     this.canvas = document.getElementById('gameCanvas');
                     this.ctx = this.canvas.getContext('2d');
                     
-                    // Set canvas size immediately
+                    // Set canvas size
                     this.canvas.width = Math.min(window.innerWidth - 40, 800);
                     this.canvas.height = Math.min(window.innerHeight - 40, 400);
                     
-                    this.gameState = 'ready';
+                    this.gameState = 'loading';
                     this.score = 0;
                     this.bestScore = parseInt(localStorage.getItem('aoDaiRunnerBest')) || 0;
                     this.gameSpeed = 4;
                     this.gravity = 0.6;
+                    
+                    // Image loading - now with 3 images
+                    this.images = {
+                        player: null,
+                        obstacle1: null,
+                        obstacle2: null
+                    };
+                    this.imagesLoaded = 0;
+                    this.totalImages = 3;
                     
                     // Player properties
                     this.player = {
@@ -157,6 +201,73 @@
                     this.clouds = [];
                     this.initializeClouds();
                     
+                    // Load images first
+                    this.loadImages();
+                }
+                
+                loadImages() {
+                    // Load player image
+                    this.images.player = new Image();
+                    this.images.player.onload = () => {
+                        console.log('Player image loaded successfully');
+                        this.imagesLoaded++;
+                        this.updateLoadingProgress();
+                    };
+                    this.images.player.onerror = () => {
+                        console.log('Player image failed to load, using fallback');
+                        this.imagesLoaded++;
+                        this.updateLoadingProgress();
+                    };
+                    this.images.player.src = 'images/player.png';
+                    
+                    // Load first obstacle image
+                    this.images.obstacle1 = new Image();
+                    this.images.obstacle1.onload = () => {
+                        console.log('Obstacle 1 image loaded successfully');
+                        this.imagesLoaded++;
+                        this.updateLoadingProgress();
+                    };
+                    this.images.obstacle1.onerror = () => {
+                        console.log('Obstacle 1 image failed to load, using fallback');
+                        this.imagesLoaded++;
+                        this.updateLoadingProgress();
+                    };
+                    this.images.obstacle1.src = 'images/obstacle.png';
+                    
+                    // Load second obstacle image
+                    this.images.obstacle2 = new Image();
+                    this.images.obstacle2.onload = () => {
+                        console.log('Obstacle 2 image loaded successfully');
+                        this.imagesLoaded++;
+                        this.updateLoadingProgress();
+                    };
+                    this.images.obstacle2.onerror = () => {
+                        console.log('Obstacle 2 image failed to load, using fallback');
+                        this.imagesLoaded++;
+                        this.updateLoadingProgress();
+                    };
+                    this.images.obstacle2.src = 'images/obstacle2.png';
+                }
+                
+                updateLoadingProgress() {
+                    const progress = (this.imagesLoaded / this.totalImages) * 100;
+                    document.getElementById('loadingProgress').style.width = progress + '%';
+                    document.getElementById('loadingText').textContent = `${this.imagesLoaded}/${this.totalImages} images loaded`;
+                    
+                    if (this.imagesLoaded >= this.totalImages) {
+                        setTimeout(() => {
+                            this.checkImagesLoaded();
+                        }, 500); // Small delay to show 100% progress
+                    }
+                }
+                
+                checkImagesLoaded() {
+                    console.log('All images loaded, starting game');
+                    document.getElementById('loadingScreen').style.display = 'none';
+                    document.getElementById('ui').style.display = 'block';
+                    document.getElementById('instructions').style.display = 'block';
+                    
+                    this.gameState = 'ready';
                     this.setupEventListeners();
                     this.gameLoop();
                     
@@ -306,21 +417,27 @@
                 }
                 
                 spawnObstacle() {
+                    // Randomly choose between obstacle1 and obstacle2
+                    const obstacleType = Math.random() < 0.5 ? 'obstacle1' : 'obstacle2';
+                    
                     const obstacle = {
                         x: this.canvas.width,
                         y: this.groundY - 40,
                         width: 30,
-                        height: 40
+                        height: 40,
+                        type: obstacleType // Store which obstacle image to use
                     };
                     
                     this.obstacles.push(obstacle);
                 }
                 
                 checkCollision(player, obstacle) {
-                    return player.x < obstacle.x + obstacle.width &&
-                           player.x + player.width > obstacle.x &&
-                           player.y < obstacle.y + obstacle.height &&
-                           player.y + player.height > obstacle.y;
+                    // Slightly more forgiving collision detection
+                    const margin = 5;
+                    return player.x + margin < obstacle.x + obstacle.width &&
+                           player.x + player.width - margin > obstacle.x &&
+                           player.y + margin < obstacle.y + obstacle.height &&
+                           player.y + player.height - margin > obstacle.y;
                 }
                 
                 gameOver() {
@@ -368,34 +485,46 @@
                     this.ctx.lineTo(this.canvas.width, this.groundY);
                     this.ctx.stroke();
                     
-                    // Draw obstacles (simple rectangles for now)
+                    // Draw obstacles
                     this.obstacles.forEach(obstacle => {
-                        this.ctx.fillStyle = '#228B22';
-                        this.ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+                        const obstacleImage = this.images[obstacle.type];
                         
-                        // Add some detail
-                        this.ctx.fillStyle = '#32CD32';
-                        this.ctx.fillRect(obstacle.x + 2, obstacle.y + 5, obstacle.width - 4, 3);
-                        this.ctx.fillRect(obstacle.x + 2, obstacle.y + 15, obstacle.width - 4, 3);
-                        this.ctx.fillRect(obstacle.x + 2, obstacle.y + 25, obstacle.width - 4, 3);
+                        if (obstacleImage && obstacleImage.complete) {
+                            // Draw the appropriate obstacle image
+                            this.ctx.drawImage(
+                                obstacleImage,
+                                obstacle.x,
+                                obstacle.y,
+                                obstacle.width,
+                                obstacle.height
+                            );
+                        } else {
+                            // Fallback rectangle if image fails to load
+                            this.ctx.fillStyle = obstacle.type === 'obstacle1' ? '#228B22' : '#32CD32';
+                            this.ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+                        }
                     });
                     
-                    // Draw player (simple rectangle for now)
-                    this.ctx.fillStyle = '#DC143C';
-                    
-                    // Add slight bounce animation when running
+                    // Draw player
                     let playerY = this.player.y;
                     if (!this.player.isJumping) {
-                        playerY += Math.sin(this.player.animFrame) * 2;
+                        playerY += Math.sin(this.player.animFrame) * 2; // Running bounce
                     }
                     
-                    this.ctx.fillRect(this.player.x, playerY, this.player.width, this.player.height);
-                    
-                    // Add some player details
-                    this.ctx.fillStyle = '#fdbcb4';
-                    this.ctx.fillRect(this.player.x + 10, playerY, 20, 15); // head
-                    this.ctx.fillStyle = '#2c3e50';
-                    this.ctx.fillRect(this.player.x + 12, playerY + 2, 16, 8); // hair
+                    if (this.images.player && this.images.player.complete) {
+                        // Draw your custom player image
+                        this.ctx.drawImage(
+                            this.images.player,
+                            this.player.x,
+                            playerY,
+                            this.player.width,
+                            this.player.height
+                        );
+                    } else {
+                        // Fallback rectangle if image fails to load
+                        this.ctx.fillStyle = '#DC143C';
+                        this.ctx.fillRect(this.player.x, playerY, this.player.width, this.player.height);
+                    }
                 }
                 
                 gameLoop() {
