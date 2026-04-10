@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Avoidance Game</title>
+    <title>Night District Navigator</title>
     <style>
         * {
             margin: 0;
@@ -12,28 +12,28 @@
         }
 
         body {
-            background: #1a1a2e;
+            background: linear-gradient(135deg, #2c1810 0%, #1a0f0a 100%);
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            font-family: Arial, sans-serif;
+            font-family: 'Arial', sans-serif;
             overflow: hidden;
             touch-action: none;
         }
 
         #gameContainer {
             position: relative;
-            background: #16213e;
-            border: 2px solid #0f3460;
-            border-radius: 10px;
-            box-shadow: 0 0 20px rgba(15, 52, 96, 0.5);
+            background: linear-gradient(180deg, #4a3728 0%, #2c1810 100%);
+            border: 3px solid #d4af37;
+            border-radius: 15px;
+            box-shadow: 0 0 30px rgba(212, 175, 55, 0.3);
         }
 
         #gameCanvas {
             display: block;
-            background: linear-gradient(180deg, #0f3460 0%, #16213e 100%);
-            border-radius: 8px;
+            background: linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            border-radius: 12px;
             cursor: none;
         }
 
@@ -41,11 +41,16 @@
             position: absolute;
             top: 20px;
             left: 20px;
-            color: #e94560;
-            font-size: 24px;
+            color: #d4af37;
+            font-size: 22px;
             font-weight: bold;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
             z-index: 10;
+            background: rgba(0,0,0,0.6);
+            padding: 12px 18px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(212, 175, 55, 0.3);
         }
 
         #gameOver {
@@ -54,19 +59,21 @@
             left: 50%;
             transform: translate(-50%, -50%);
             background: rgba(26, 26, 46, 0.95);
-            color: #e94560;
+            color: #d4af37;
             padding: 30px;
-            border-radius: 15px;
+            border-radius: 20px;
             text-align: center;
             font-size: 20px;
-            border: 2px solid #0f3460;
+            border: 3px solid #d4af37;
             display: none;
             z-index: 20;
+            box-shadow: 0 0 30px rgba(0,0,0,0.5);
         }
 
         #gameOver h2 {
             margin-bottom: 15px;
             font-size: 28px;
+            color: #ff6b6b;
         }
 
         #gameOver p {
@@ -75,47 +82,70 @@
         }
 
         #restartBtn {
-            background: #e94560;
-            color: white;
+            background: linear-gradient(45deg, #d4af37, #f4d03f);
+            color: #2c1810;
             border: none;
             padding: 15px 30px;
             font-size: 18px;
-            border-radius: 8px;
+            font-weight: bold;
+            border-radius: 25px;
             cursor: pointer;
             margin-top: 15px;
-            transition: background 0.3s;
+            transition: transform 0.3s;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
         }
 
         #restartBtn:hover {
-            background: #d63447;
+            transform: translateY(-2px);
+        }
+
+        #loadingText {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #d4af37;
+            font-size: 18px;
+            text-align: center;
         }
     </style>
 </head>
 <body>
     <div id="gameContainer">
         <canvas id="gameCanvas"></canvas>
-        <div id="ui">
-            <div>Score: <span id="score">0</span></div>
-            <div>Speed: <span id="speed">1.0x</span></div>
+        <div id="loadingText">Loading street scene...</div>
+        <div id="ui" style="display: none;">
+            <div>Distance: <span id="score">0</span>m</div>
+            <div>Crowd Level: <span id="speed">1.0x</span></div>
         </div>
         <div id="gameOver">
-            <h2>Game Over!</h2>
-            <p>Final Score: <span id="finalScore">0</span></p>
-            <p>Survival Time: <span id="survivalTime">0</span>s</p>
-            <button id="restartBtn">Tap to Restart</button>
+            <h2>Blocked!</h2>
+            <p>Distance Traveled: <span id="finalScore">0</span>m</p>
+            <p>Time in District: <span id="survivalTime">0</span>s</p>
+            <button id="restartBtn">Try Again</button>
         </div>
     </div>
 
     <script>
-        class AvoidanceGame {
+        class NightDistrictGame {
             constructor() {
                 this.canvas = document.getElementById('gameCanvas');
                 this.ctx = this.canvas.getContext('2d');
                 this.setupCanvas();
                 
-                this.gameState = 'playing'; // 'playing' or 'gameOver'
+                this.gameState = 'loading';
                 this.score = 0;
                 this.startTime = Date.now();
+                
+                // Images
+                this.images = {
+                    player: null,
+                    lady: null,
+                    bar: null,
+                    restaurant: null
+                };
+                this.imagesLoaded = 0;
+                this.totalImages = 4;
                 
                 // Player properties
                 this.player = {
@@ -123,28 +153,117 @@
                     y: 0,
                     targetX: 0,
                     targetY: 0,
-                    radius: 15,
-                    speed: 0.15 // Smooth movement factor
+                    radius: 18,
+                    width: 30,
+                    height: 40,
+                    speed: 0.15
                 };
                 
-                // NPCs array
-                this.npcs = [];
-                this.npcSpawnTimer = 0;
-                this.npcSpawnInterval = 60; // frames
-                this.baseNpcSpeed = 2;
-                this.speedMultiplier = 1;
+                // Ladies (NPCs) and obstacles
+                this.ladies = [];
+                this.obstacles = [];
+                this.ladySpawnTimer = 0;
+                this.obstacleSpawnTimer = 0;
+                this.ladySpawnInterval = 45;
+                this.obstacleSpawnInterval = 180;
+                this.baseLadySpeed = 1.5;
+                this.crowdLevel = 1;
                 
-                // Lanes for organized spawning
-                this.lanes = 5;
+                // Street lanes
+                this.lanes = 6;
                 this.laneWidth = 0;
                 
-                this.setupEventListeners();
-                this.resetGame();
-                this.gameLoop();
+                // Street lighting effect
+                this.streetLights = [];
+                
+                this.loadImages();
+            }
+            
+            loadImages() {
+                // Player (you navigating through the district)
+                this.images.player = new Image();
+                this.images.player.onload = () => {
+                    this.imagesLoaded++;
+                    this.checkImagesLoaded();
+                };
+                this.images.player.src = 'data:image/svg+xml;base64,' + btoa(`
+                    <svg width="30" height="40" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="15" cy="12" r="8" fill="#fdbcb4"/>
+                        <rect x="8" y="18" width="14" height="20" rx="7" fill="#2c3e50"/>
+                        <rect x="10" y="20" width="10" height="16" rx="5" fill="#34495e"/>
+                        <circle cx="11" cy="9" r="1" fill="#333"/>
+                        <circle cx="19" cy="9" r="1" fill="#333"/>
+                        <path d="M11 14 Q15 16 19 14" stroke="#333" stroke-width="1" fill="none"/>
+                    </svg>
+                `);
+                
+                // Ladies in ao dai walking through the district
+                this.images.lady = new Image();
+                this.images.lady.onload = () => {
+                    this.imagesLoaded++;
+                    this.checkImagesLoaded();
+                };
+                this.images.lady.src = 'data:image/svg+xml;base64,' + btoa(`
+                    <svg width="28" height="45" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="14" cy="10" r="7" fill="#fdbcb4"/>
+                        <rect x="4" y="16" width="20" height="29" rx="10" fill="#e74c3c"/>
+                        <rect x="6" y="18" width="16" height="25" rx="8" fill="#c0392b"/>
+                        <circle cx="10" cy="7" r="1" fill="#333"/>
+                        <circle cx="18" cy="7" r="1" fill="#333"/>
+                        <path d="M10 12 Q14 14 18 12" stroke="#333" stroke-width="1" fill="none"/>
+                        <rect x="9" y="2" width="10" height="6" rx="5" fill="#2c3e50"/>
+                        <rect x="2" y="40" width="6" height="3" rx="1" fill="#8b4513"/>
+                        <rect x="20" y="40" width="6" height="3" rx="1" fill="#8b4513"/>
+                    </svg>
+                `);
+                
+                // Bar obstacle
+                this.images.bar = new Image();
+                this.images.bar.onload = () => {
+                    this.imagesLoaded++;
+                    this.checkImagesLoaded();
+                };
+                this.images.bar.src = 'data:image/svg+xml;base64,' + btoa(`
+                    <svg width="60" height="40" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="0" y="10" width="60" height="30" fill="#8b4513"/>
+                        <rect x="5" y="15" width="50" height="20" fill="#a0522d"/>
+                        <rect x="10" y="5" width="40" height="8" fill="#654321"/>
+                        <text x="30" y="28" text-anchor="middle" fill="#d4af37" font-size="8" font-weight="bold">BAR</text>
+                        <circle cx="15" cy="20" r="2" fill="#ffff00" opacity="0.8"/>
+                        <circle cx="45" cy="25" r="2" fill="#ff6b6b" opacity="0.8"/>
+                    </svg>
+                `);
+                
+                // Restaurant obstacle
+                this.images.restaurant = new Image();
+                this.images.restaurant.onload = () => {
+                    this.imagesLoaded++;
+                    this.checkImagesLoaded();
+                };
+                this.images.restaurant.src = 'data:image/svg+xml;base64,' + btoa(`
+                    <svg width="55" height="45" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="0" y="15" width="55" height="30" fill="#d35400"/>
+                        <rect x="5" y="20" width="45" height="20" fill="#e67e22"/>
+                        <rect x="10" y="8" width="35" height="10" fill="#c0392b"/>
+                        <text x="27" y="32" text-anchor="middle" fill="#fff" font-size="6" font-weight="bold">RESTAURANT</text>
+                        <rect x="15" y="25" width="8" height="8" fill="#f39c12"/>
+                        <rect x="32" y="25" width="8" height="8" fill="#f39c12"/>
+                    </svg>
+                `);
+            }
+            
+            checkImagesLoaded() {
+                if (this.imagesLoaded >= this.totalImages) {
+                    document.getElementById('loadingText').style.display = 'none';
+                    document.getElementById('ui').style.display = 'block';
+                    this.setupEventListeners();
+                    this.initializeStreetLights();
+                    this.resetGame();
+                    this.gameLoop();
+                }
             }
             
             setupCanvas() {
-                const container = document.getElementById('gameContainer');
                 const maxWidth = Math.min(window.innerWidth - 40, 400);
                 const maxHeight = Math.min(window.innerHeight - 40, 700);
                 
@@ -154,8 +273,19 @@
                 this.laneWidth = this.canvas.width / this.lanes;
             }
             
+            initializeStreetLights() {
+                // Create street lights for ambiance
+                for (let i = 0; i < 4; i++) {
+                    this.streetLights.push({
+                        x: (i + 0.5) * (this.canvas.width / 4),
+                        y: Math.random() * this.canvas.height,
+                        intensity: 0.3 + Math.random() * 0.4,
+                        flicker: Math.random() * 0.1
+                    });
+                }
+            }
+            
             setupEventListeners() {
-                // Touch events
                 this.canvas.addEventListener('touchstart', (e) => {
                     e.preventDefault();
                     if (this.gameState === 'gameOver') {
@@ -172,7 +302,6 @@
                     }
                 });
                 
-                // Mouse events for desktop testing
                 this.canvas.addEventListener('mousedown', (e) => {
                     if (this.gameState === 'gameOver') {
                         this.restartGame();
@@ -187,7 +316,6 @@
                     }
                 });
                 
-                // Restart button
                 document.getElementById('restartBtn').addEventListener('click', () => {
                     this.restartGame();
                 });
@@ -209,19 +337,18 @@
                 this.gameState = 'playing';
                 this.score = 0;
                 this.startTime = Date.now();
-                this.speedMultiplier = 1;
+                this.crowdLevel = 1;
                 
-                // Reset player position
                 this.player.x = this.canvas.width / 2;
-                this.player.y = this.canvas.height - 100;
+                this.player.y = this.canvas.height - 80;
                 this.player.targetX = this.player.x;
                 this.player.targetY = this.player.y;
                 
-                // Clear NPCs
-                this.npcs = [];
-                this.npcSpawnTimer = 0;
+                this.ladies = [];
+                this.obstacles = [];
+                this.ladySpawnTimer = 0;
+                this.obstacleSpawnTimer = 0;
                 
-                // Hide game over screen
                 document.getElementById('gameOver').style.display = 'none';
             }
             
@@ -232,90 +359,116 @@
             update() {
                 if (this.gameState !== 'playing') return;
                 
-                // Update score and speed
-                this.score = Math.floor((Date.now() - this.startTime) / 100);
-                this.speedMultiplier = 1 + (this.score / 1000);
+                this.score = Math.floor((Date.now() - this.startTime) / 50);
+                this.crowdLevel = 1 + (this.score / 2000);
                 
-                // Update player position with smooth movement
+                // Update player
                 const dx = this.player.targetX - this.player.x;
                 const dy = this.player.targetY - this.player.y;
                 this.player.x += dx * this.player.speed;
                 this.player.y += dy * this.player.speed;
                 
-                // Keep player in bounds
-                this.player.x = Math.max(this.player.radius, Math.min(this.canvas.width - this.player.radius, this.player.x));
-                this.player.y = Math.max(this.player.radius, Math.min(this.canvas.height - this.player.radius, this.player.y));
+                this.player.x = Math.max(this.player.width/2, Math.min(this.canvas.width - this.player.width/2, this.player.x));
+                this.player.y = Math.max(this.player.height/2, Math.min(this.canvas.height - this.player.height/2, this.player.y));
                 
-                // Spawn NPCs
-                this.npcSpawnTimer++;
-                if (this.npcSpawnTimer >= this.npcSpawnInterval) {
-                    this.spawnNPC();
-                    this.npcSpawnTimer = 0;
-                    
-                    // Gradually decrease spawn interval (increase frequency)
-                    this.npcSpawnInterval = Math.max(30, 60 - Math.floor(this.score / 200));
+                // Spawn ladies
+                this.ladySpawnTimer++;
+                if (this.ladySpawnTimer >= this.ladySpawnInterval) {
+                    this.spawnLady();
+                    this.ladySpawnTimer = 0;
+                    this.ladySpawnInterval = Math.max(25, 45 - Math.floor(this.score / 300));
                 }
                 
-                // Update NPCs
-                for (let i = this.npcs.length - 1; i >= 0; i--) {
-                    const npc = this.npcs[i];
-                    npc.y += npc.speed * this.speedMultiplier;
+                // Spawn obstacles
+                this.obstacleSpawnTimer++;
+                if (this.obstacleSpawnTimer >= this.obstacleSpawnInterval) {
+                    this.spawnObstacle();
+                    this.obstacleSpawnTimer = 0;
+                }
+                
+                // Update ladies
+                for (let i = this.ladies.length - 1; i >= 0; i--) {
+                    const lady = this.ladies[i];
+                    lady.y += lady.speed * this.crowdLevel;
                     
-                    // Remove NPCs that are off screen
-                    if (npc.y > this.canvas.height + npc.radius) {
-                        this.npcs.splice(i, 1);
+                    if (lady.y > this.canvas.height + lady.height) {
+                        this.ladies.splice(i, 1);
                         continue;
                     }
                     
-                    // Check collision with player
-                    if (this.checkCollision(this.player, npc)) {
+                    if (this.checkCollision(this.player, lady)) {
                         this.gameOver();
                         return;
                     }
                 }
                 
-                // Update UI
+                // Update obstacles
+                for (let i = this.obstacles.length - 1; i >= 0; i--) {
+                    const obstacle = this.obstacles[i];
+                    obstacle.y += 1 * this.crowdLevel;
+                    
+                    if (obstacle.y > this.canvas.height + obstacle.height) {
+                        this.obstacles.splice(i, 1);
+                        continue;
+                    }
+                    
+                    if (this.checkCollision(this.player, obstacle)) {
+                        this.gameOver();
+                        return;
+                    }
+                }
+                
                 document.getElementById('score').textContent = this.score;
-                document.getElementById('speed').textContent = this.speedMultiplier.toFixed(1) + 'x';
+                document.getElementById('speed').textContent = this.crowdLevel.toFixed(1) + 'x';
             }
             
-            spawnNPC() {
-                // Choose a lane with some randomness
+            spawnLady() {
                 const baseLane = Math.floor(Math.random() * this.lanes);
-                const laneOffset = (Math.random() - 0.5) * this.laneWidth * 0.8;
-                const x = baseLane * this.laneWidth + this.laneWidth / 2 + laneOffset;
+                const laneOffset = (Math.random() - 0.5) * this.laneWidth * 0.7;
+                let x = baseLane * this.laneWidth + this.laneWidth / 2 + laneOffset;
                 
-                // Ensure NPCs don't spawn too close to player horizontally
+                x = Math.max(20, Math.min(this.canvas.width - 20, x));
+                
                 const playerLane = Math.floor(this.player.x / this.laneWidth);
-                const npcLane = Math.floor(x / this.laneWidth);
+                const ladyLane = Math.floor(x / this.laneWidth);
                 
-                // Sometimes skip spawning if it would be unfair
-                if (Math.abs(playerLane - npcLane) <= 1 && Math.random() < 0.3) {
+                if (Math.abs(playerLane - ladyLane) <= 1 && Math.random() < 0.4) {
                     return;
                 }
                 
-                const npc = {
-                    x: Math.max(20, Math.min(this.canvas.width - 20, x)),
+                const lady = {
+                    x: x,
                     y: -30,
-                    radius: 12 + Math.random() * 8,
-                    speed: this.baseNpcSpeed + Math.random() * 1,
-                    color: this.getRandomNPCColor()
+                    radius: 16,
+                    width: 28,
+                    height: 45,
+                    speed: this.baseLadySpeed + Math.random() * 0.8
                 };
                 
-                this.npcs.push(npc);
+                this.ladies.push(lady);
             }
             
-            getRandomNPCColor() {
-                const colors = ['#e94560', '#f39c12', '#e74c3c', '#9b59b6', '#3498db'];
-                return colors[Math.floor(Math.random() * colors.length)];
+            spawnObstacle() {
+                const side = Math.random() < 0.5 ? 'left' : 'right';
+                const isBar = Math.random() < 0.6;
+                
+                const obstacle = {
+                    x: side === 'left' ? 30 : this.canvas.width - 30,
+                    y: -50,
+                    radius: isBar ? 30 : 27,
+                    width: isBar ? 60 : 55,
+                    height: isBar ? 40 : 45,
+                    type: isBar ? 'bar' : 'restaurant'
+                };
+                
+                this.obstacles.push(obstacle);
             }
             
             checkCollision(obj1, obj2) {
                 const dx = obj1.x - obj2.x;
                 const dy = obj1.y - obj2.y;
                 const distance = Math.sqrt(dx * dx + dy * dy);
-                // Slightly forgiving collision detection
-                return distance < (obj1.radius + obj2.radius) * 0.8;
+                return distance < (obj1.radius + obj2.radius) * 0.85;
             }
             
             gameOver() {
@@ -328,12 +481,23 @@
             }
             
             draw() {
-                // Clear canvas
-                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                // Clear with night street background
+                this.ctx.fillStyle = '#0f1419';
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
                 
-                // Draw lane guides (subtle)
-                this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-                this.ctx.lineWidth = 1;
+                // Draw street lights ambiance
+                this.streetLights.forEach(light => {
+                    const gradient = this.ctx.createRadialGradient(light.x, light.y, 0, light.x, light.y, 80);
+                    gradient.addColorStop(0, `rgba(255, 220, 100, ${light.intensity})`);
+                    gradient.addColorStop(1, 'rgba(255, 220, 100, 0)');
+                    this.ctx.fillStyle = gradient;
+                    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                });
+                
+                // Draw street lanes
+                this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+                this.ctx.lineWidth = 2;
+                this.ctx.setLineDash([10, 20]);
                 for (let i = 1; i < this.lanes; i++) {
                     const x = i * this.laneWidth;
                     this.ctx.beginPath();
@@ -341,46 +505,59 @@
                     this.ctx.lineTo(x, this.canvas.height);
                     this.ctx.stroke();
                 }
+                this.ctx.setLineDash([]);
                 
-                // Draw NPCs
-                this.npcs.forEach(npc => {
-                    this.ctx.fillStyle = npc.color;
-                    this.ctx.beginPath();
-                    this.ctx.arc(npc.x, npc.y, npc.radius, 0, Math.PI * 2);
-                    this.ctx.fill();
-                    
-                    // Add a subtle glow effect
-                    this.ctx.shadowColor = npc.color;
-                    this.ctx.shadowBlur = 10;
-                    this.ctx.fill();
-                    this.ctx.shadowBlur = 0;
+                // Draw obstacles
+                this.obstacles.forEach(obstacle => {
+                    const img = obstacle.type === 'bar' ? this.images.bar : this.images.restaurant;
+                    if (img && img.complete) {
+                        this.ctx.drawImage(
+                            img,
+                            obstacle.x - obstacle.width/2,
+                            obstacle.y - obstacle.height/2,
+                            obstacle.width,
+                            obstacle.height
+                        );
+                    }
+                });
+                
+                // Draw ladies
+                this.ladies.forEach(lady => {
+                    if (this.images.lady && this.images.lady.complete) {
+                        this.ctx.drawImage(
+                            this.images.lady,
+                            lady.x - lady.width/2,
+                            lady.y - lady.height/2,
+                            lady.width,
+                            lady.height
+                        );
+                    }
                 });
                 
                 // Draw player
-                this.ctx.fillStyle = '#00ff88';
-                this.ctx.beginPath();
-                this.ctx.arc(this.player.x, this.player.y, this.player.radius, 0, Math.PI * 2);
-                this.ctx.fill();
+                if (this.images.player && this.images.player.complete) {
+                    this.ctx.drawImage(
+                        this.images.player,
+                        this.player.x - this.player.width/2,
+                        this.player.y - this.player.height/2,
+                        this.player.width,
+                        this.player.height
+                    );
+                }
                 
-                // Player glow effect
-                this.ctx.shadowColor = '#00ff88';
-                this.ctx.shadowBlur = 15;
-                this.ctx.fill();
-                this.ctx.shadowBlur = 0;
-                
-                // Draw player direction indicator
+                // Draw movement indicator
                 const dx = this.player.targetX - this.player.x;
                 const dy = this.player.targetY - this.player.y;
                 const distance = Math.sqrt(dx * dx + dy * dy);
                 
-                if (distance > 5) {
-                    this.ctx.strokeStyle = 'rgba(0, 255, 136, 0.5)';
-                    this.ctx.lineWidth = 2;
+                if (distance > 10) {
+                    this.ctx.strokeStyle = 'rgba(212, 175, 55, 0.7)';
+                    this.ctx.lineWidth = 3;
                     this.ctx.beginPath();
                     this.ctx.moveTo(this.player.x, this.player.y);
                     this.ctx.lineTo(
-                        this.player.x + (dx / distance) * (this.player.radius + 10),
-                        this.player.y + (dy / distance) * (this.player.radius + 10)
+                        this.player.x + (dx / distance) * 25,
+                        this.player.y + (dy / distance) * 25
                     );
                     this.ctx.stroke();
                 }
@@ -393,14 +570,12 @@
             }
         }
         
-        // Start the game when page loads
         window.addEventListener('load', () => {
-            new AvoidanceGame();
+            new NightDistrictGame();
         });
         
-        // Handle window resize
         window.addEventListener('resize', () => {
-            location.reload(); // Simple solution for resize
+            location.reload();
         });
     </script>
 </body>
