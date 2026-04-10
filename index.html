@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ao Dai Runner - Enhanced</title>
+    <title>Ao Dai Runner - With Speech Bubbles</title>
     <style>
         * {
             margin: 0;
@@ -142,7 +142,7 @@
             <div style="font-size: 14px; margin-top: 8px;">
                 🦘 Jump over ground obstacles<br>
                 🦆 Duck under flying obstacles<br>
-                ⚡ Watch out for stacked obstacles!
+                💬 Listen to the street calls!
             </div>
         </div>
         <div id="gameOver">
@@ -173,6 +173,37 @@
                     this.gameSpeed = 4;
                     this.gravity = 0.6;
                     
+                    // Speech bubble phrases - your suggestions + additional ones
+                    this.speechPhrases = [
+                        // Your nightlife district phrases
+                        "Massage sir",
+                        "一杯だけどぞー",
+                        "おにーさん－",
+                        "カラオケー",
+                        "焼き鳥寿司ラーメンどーじょー",
+                        "sup",
+                        
+                        // Additional contextual phrases
+                        "Watch out!",
+                        "Jump higher!",
+                        "Xin chào!",
+                        "Too slow!",
+                        "Nice try!",
+                        "Careful!",
+                        "You can do it!",
+                        "Come here!",
+                        "Special price!",
+                        "Very cheap!",
+                        "Best massage!",
+                        "Cold beer!",
+                        "Happy hour!",
+                        "Welcome!",
+                        "こんばんは！",
+                        "いらっしゃいませ！",
+                        "安いよ！",
+                        "美味しいよ！"
+                    ];
+                    
                     // Image loading
                     this.images = {
                         player: null,
@@ -194,7 +225,7 @@
                         jumpPower: -16,
                         groundY: this.canvas.height - 110,
                         animFrame: 0,
-                        duckHeight: 25, // Height when ducking
+                        duckHeight: 25,
                         normalHeight: 50
                     };
                     
@@ -206,9 +237,12 @@
                     this.obstacleSpawnInterval = 100;
                     this.minSpawnInterval = 40;
                     
+                    // Speech bubbles array
+                    this.speechBubbles = [];
+                    
                     // Ground and air levels
                     this.groundY = this.canvas.height - 60;
-                    this.airY = this.canvas.height - 200; // Flying obstacle level
+                    this.airY = this.canvas.height - 200;
                     
                     // Clouds
                     this.clouds = [];
@@ -216,7 +250,7 @@
                     
                     // Difficulty progression
                     this.difficultyTimer = 0;
-                    this.difficultyInterval = 1000; // Increase difficulty every 1000 frames
+                    this.difficultyInterval = 1000;
                     
                     this.loadImages();
                 }
@@ -378,13 +412,42 @@
                     this.player.height = this.player.normalHeight;
                     this.player.animFrame = 0;
                     
-                    // Clear obstacles
+                    // Clear obstacles and speech bubbles
                     this.obstacles = [];
+                    this.speechBubbles = [];
                     this.obstacleSpawnTimer = 0;
                     
                     // Show instructions
                     document.getElementById('gameOver').style.display = 'none';
                     document.getElementById('instructions').style.display = 'block';
+                }
+                
+                // Create speech bubble for obstacle
+                createSpeechBubble(obstacle) {
+                    // 70% chance of creating a speech bubble
+                    if (Math.random() < 0.7) {
+                        const phrase = this.speechPhrases[Math.floor(Math.random() * this.speechPhrases.length)];
+                        
+                        const bubble = {
+                            text: phrase,
+                            x: obstacle.x + obstacle.width / 2,
+                            y: obstacle.y - 20,
+                            width: 0, // Will be calculated based on text
+                            height: 25,
+                            opacity: 0,
+                            life: 180, // Frames to live (3 seconds at 60fps)
+                            maxLife: 180,
+                            targetObstacle: obstacle,
+                            animationPhase: 0
+                        };
+                        
+                        // Calculate bubble width based on text length
+                        this.ctx.font = '12px Arial';
+                        const textWidth = this.ctx.measureText(phrase).width;
+                        bubble.width = Math.max(textWidth + 20, 60);
+                        
+                        this.speechBubbles.push(bubble);
+                    }
                 }
                 
                 update() {
@@ -432,7 +495,7 @@
                         const obstacle = this.obstacles[i];
                         obstacle.x -= this.gameSpeed;
                         
-                        // Update flying obstacles (slight up/down movement)
+                        // Update flying obstacles
                         if (obstacle.isFlying) {
                             obstacle.floatOffset += obstacle.floatSpeed;
                             obstacle.y = obstacle.baseY + Math.sin(obstacle.floatOffset) * obstacle.floatAmplitude;
@@ -448,6 +511,37 @@
                         if (this.checkCollision(this.player, obstacle)) {
                             this.gameOver();
                             return;
+                        }
+                    }
+                    
+                    // Update speech bubbles
+                    for (let i = this.speechBubbles.length - 1; i >= 0; i--) {
+                        const bubble = this.speechBubbles[i];
+                        
+                        // Move bubble with its target obstacle
+                        if (bubble.targetObstacle) {
+                            bubble.x = bubble.targetObstacle.x + bubble.targetObstacle.width / 2;
+                            bubble.y = bubble.targetObstacle.y - 30;
+                        }
+                        
+                        // Update bubble animation
+                        bubble.animationPhase += 0.1;
+                        bubble.life--;
+                        
+                        // Fade in/out animation
+                        if (bubble.life > bubble.maxLife * 0.8) {
+                            // Fade in
+                            bubble.opacity = Math.min(1, (bubble.maxLife - bubble.life) / (bubble.maxLife * 0.2));
+                        } else if (bubble.life < bubble.maxLife * 0.3) {
+                            // Fade out
+                            bubble.opacity = bubble.life / (bubble.maxLife * 0.3);
+                        } else {
+                            bubble.opacity = 1;
+                        }
+                        
+                        // Remove expired bubbles
+                        if (bubble.life <= 0) {
+                            this.speechBubbles.splice(i, 1);
                         }
                     }
                     
@@ -467,17 +561,15 @@
                 
                 spawnObstaclePattern() {
                     const patterns = [
-                        'single',      // Single obstacle
-                        'double',      // Two obstacles with gap
-                        'stack',       // Stacked obstacles
-                        'flying',      // Flying obstacle
-                        'mixed',       // Ground + flying
-                        'triple'       // Three obstacles (high level only)
+                        'single',
+                        'double',
+                        'stack',
+                        'flying',
+                        'mixed',
+                        'triple'
                     ];
                     
-                    // Filter patterns based on level
                     let availablePatterns = patterns.slice(0, Math.min(3 + Math.floor(this.level / 2), patterns.length));
-                    
                     const pattern = availablePatterns[Math.floor(Math.random() * availablePatterns.length)];
                     
                     switch (pattern) {
@@ -503,7 +595,7 @@
                 }
                 
                 spawnSingleObstacle() {
-                    const isFlying = Math.random() < 0.3; // 30% chance of flying
+                    const isFlying = Math.random() < 0.3;
                     this.createObstacle(this.canvas.width, isFlying);
                 }
                 
@@ -514,8 +606,8 @@
                 
                 spawnStackedObstacle() {
                     const x = this.canvas.width;
-                    this.createObstacle(x, false, 'small'); // Bottom obstacle
-                    this.createObstacle(x, false, 'small', this.groundY - 70); // Top obstacle
+                    this.createObstacle(x, false, 'small');
+                    this.createObstacle(x, false, 'small', this.groundY - 70);
                 }
                 
                 spawnFlyingObstacle() {
@@ -523,8 +615,8 @@
                 }
                 
                 spawnMixedObstacle() {
-                    this.createObstacle(this.canvas.width, false); // Ground
-                    this.createObstacle(this.canvas.width + 40, true); // Flying
+                    this.createObstacle(this.canvas.width, false);
+                    this.createObstacle(this.canvas.width + 40, true);
                 }
                 
                 spawnTripleObstacle() {
@@ -548,7 +640,7 @@
                             width = 40 + Math.random() * 20;
                             height = 50 + Math.random() * 20;
                             break;
-                        default: // normal
+                        default:
                             width = 25 + Math.random() * 20;
                             height = 35 + Math.random() * 15;
                     }
@@ -557,7 +649,7 @@
                     if (customY !== null) {
                         y = customY - height;
                     } else if (isFlying) {
-                        y = this.airY - height + (Math.random() * 60 - 30); // Vary flying height
+                        y = this.airY - height + (Math.random() * 60 - 30);
                     } else {
                         y = this.groundY - height;
                     }
@@ -581,12 +673,14 @@
                     }
                     
                     this.obstacles.push(obstacle);
+                    
+                    // Create speech bubble for this obstacle
+                    this.createSpeechBubble(obstacle);
                 }
                 
                 checkCollision(player, obstacle) {
-                    const margin = 3; // More precise collision
+                    const margin = 3;
                     
-                    // Adjust player hitbox based on ducking
                     const playerHeight = player.isDucking ? player.duckHeight : player.height;
                     const playerY = player.isDucking ? player.groundY + (player.normalHeight - player.duckHeight) : player.y;
                     
@@ -599,7 +693,6 @@
                 gameOver() {
                     this.gameState = 'gameOver';
                     
-                    // Update best score
                     if (this.score > this.bestScore) {
                         this.bestScore = this.score;
                         localStorage.setItem('aoDaiRunnerBest', this.bestScore.toString());
@@ -609,6 +702,57 @@
                     document.getElementById('finalLevel').textContent = this.level;
                     document.getElementById('bestScore').textContent = this.bestScore;
                     document.getElementById('gameOver').style.display = 'block';
+                }
+                
+                drawSpeechBubble(bubble) {
+                    if (bubble.opacity <= 0) return;
+                    
+                    this.ctx.save();
+                    this.ctx.globalAlpha = bubble.opacity;
+                    
+                    // Calculate bubble position
+                    const bubbleX = bubble.x - bubble.width / 2;
+                    const bubbleY = bubble.y - bubble.height + Math.sin(bubble.animationPhase) * 2;
+                    
+                    // Draw bubble shadow
+                    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+                    this.ctx.beginPath();
+                    this.ctx.roundRect(bubbleX + 2, bubbleY + 2, bubble.width, bubble.height, 12);
+                    this.ctx.fill();
+                    
+                    // Draw bubble background
+                    this.ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+                    this.ctx.beginPath();
+                    this.ctx.roundRect(bubbleX, bubbleY, bubble.width, bubble.height, 12);
+                    this.ctx.fill();
+                    
+                    // Draw bubble border
+                    this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+                    this.ctx.lineWidth = 1;
+                    this.ctx.stroke();
+                    
+                    // Draw bubble tail (pointer)
+                    this.ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(bubble.x - 8, bubbleY + bubble.height);
+                    this.ctx.lineTo(bubble.x, bubbleY + bubble.height + 8);
+                    this.ctx.lineTo(bubble.x + 8, bubbleY + bubble.height);
+                    this.ctx.closePath();
+                    this.ctx.fill();
+                    this.ctx.stroke();
+                    
+                    // Draw text
+                    this.ctx.fillStyle = '#333';
+                    this.ctx.font = 'bold 12px Arial';
+                    this.ctx.textAlign = 'center';
+                    this.ctx.textBaseline = 'middle';
+                    this.ctx.fillText(
+                        bubble.text,
+                        bubble.x,
+                        bubbleY + bubble.height / 2
+                    );
+                    
+                    this.ctx.restore();
                 }
                 
                 draw() {
@@ -634,7 +778,7 @@
                     
                     // Draw ground with texture
                     this.ctx.fillStyle = '#8FBC8F';
-                    this.ctx.fillRect(0, this.groundY, this.canvas.width, this.canvas.height - this.groundY);
+                                        this.ctx.fillRect(0, this.groundY, this.canvas.width, this.canvas.height - this.groundY);
                     
                     // Ground details
                     this.ctx.fillStyle = '#7CFC00';
@@ -657,6 +801,7 @@
                         // Add shadow for flying obstacles
                         if (obstacle.isFlying) {
                             this.ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+                            this.ctx.beginPath();
                             this.ctx.ellipse(
                                 obstacle.x + obstacle.width/2,
                                 this.groundY - 5,
@@ -698,6 +843,11 @@
                                 this.ctx.fillRect(obstacle.x + 2, obstacle.y + 2, obstacle.width - 4, 3);
                             }
                         }
+                    });
+                    
+                    // Draw speech bubbles BEFORE drawing player (so player appears on top)
+                    this.speechBubbles.forEach(bubble => {
+                        this.drawSpeechBubble(bubble);
                     });
                     
                     // Draw enhanced player
@@ -743,9 +893,13 @@
                     // Draw level indicator
                     if (this.level > 1) {
                         this.ctx.fillStyle = 'rgba(255, 215, 0, 0.8)';
-                        this.ctx.font = '16px Arial';
-                        this.ctx.fillText(`Level ${this.level}!`, this.canvas.width - 100, 50);
+                        this.ctx.font = 'bold 16px Arial';
+                        this.ctx.textAlign = 'right';
+                        this.ctx.fillText(`Level ${this.level}!`, this.canvas.width - 20, 50);
                     }
+                    
+                    // Reset text alignment for other text
+                    this.ctx.textAlign = 'left';
                 }
                 
                 gameLoop() {
@@ -753,6 +907,23 @@
                     this.draw();
                     requestAnimationFrame(() => this.gameLoop());
                 }
+            }
+            
+            // Add roundRect method if not supported
+            if (!CanvasRenderingContext2D.prototype.roundRect) {
+                CanvasRenderingContext2D.prototype.roundRect = function(x, y, width, height, radius) {
+                    this.beginPath();
+                    this.moveTo(x + radius, y);
+                    this.lineTo(x + width - radius, y);
+                    this.quadraticCurveTo(x + width, y, x + width, y + radius);
+                    this.lineTo(x + width, y + height - radius);
+                    this.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+                    this.lineTo(x + radius, y + height);
+                    this.quadraticCurveTo(x, y + height, x, y + height - radius);
+                    this.lineTo(x, y + radius);
+                    this.quadraticCurveTo(x, y, x + radius, y);
+                    this.closePath();
+                };
             }
             
             // Start the game
